@@ -30,11 +30,15 @@ jobs:
 
       - id: set_image_tag
         name: Set image tag and build Docker image
+        shell: bash
         run: |
           IMAGE_TAG="${{ secrets.DOCKERHUB_USERNAME }}/mlops_assignment3:latest"
-          echo "image_tag=$IMAGE_TAG" >> $GITHUB_OUTPUT
+          echo "image_tag=$IMAGE_TAG" >> "$GITHUB_OUTPUT"
           echo "Building image with tag: $IMAGE_TAG"
           docker build -t "$IMAGE_TAG" .
+
+      - name: Debug: Step output
+        run: echo "Step output in build job: ${{ steps.set_image_tag.outputs.image_tag }}"
 
       - name: Run Docker container and verify predictions
         run: |
@@ -42,32 +46,25 @@ jobs:
           echo "Running container with image: $IMAGE_TAG"
           docker run --rm "$IMAGE_TAG" python scripts/predict.py
 
-      - name: Show built image tag output
-        run: echo "Built image tag is ${{ steps.set_image_tag.outputs.image_tag }}"
-
   push_image:
     needs: build_and_test_container
     runs-on: ubuntu-latest
 
     steps:
-      - name: Debug output from job1
+      - name: Debug: Output from build job
         run: |
           echo "Output image_tag: ${{ needs.build_and_test_container.outputs.image_tag }}"
-          
+          echo "All outputs: ${{ toJson(needs.build_and_test_container.outputs) }}"
+
       - name: Log in to Docker Hub
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Pull and push Docker image
-        run: |
-          IMAGE_TAG="${{ needs.build_and_test_container.outputs.image_tag }}"
-          echo "Image tag received from build job: $IMAGE_TAG"
-
       - name: Checkout repository (needed for rebuild)
         uses: actions/checkout@v4
-        
+
       - name: Rebuild and push Docker image
         run: |
           IMAGE_TAG="${{ needs.build_and_test_container.outputs.image_tag }}"
