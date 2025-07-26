@@ -29,41 +29,48 @@ jobs:
         run: python scripts/train.py
 
       - id: set-image-tag
-        name: Build Docker image
+        name: Set image tag and build Docker image
         run: |
-          IMAGE_TAG=${{ secrets.DOCKERHUB_USERNAME }}/mlops_assignment3:latest
+          IMAGE_TAG="${{ secrets.DOCKERHUB_USERNAME }}/mlops_assignment3:latest"
           echo "image-tag=$IMAGE_TAG" >> $GITHUB_OUTPUT
-          docker build -t $IMAGE_TAG .
+          echo "Building image with tag: $IMAGE_TAG"
+          docker build -t "$IMAGE_TAG" .
 
       - name: Run Docker container and verify predictions
-        run: docker run --rm ${{ steps.set-image-tag.outputs.image-tag }} python scripts/predict.py
+        run: |
+          IMAGE_TAG="${{ steps.set-image-tag.outputs.image-tag }}"
+          echo "Running container with image: $IMAGE_TAG"
+          docker run --rm "$IMAGE_TAG" python scripts/predict.py
 
       - name: Show built image tag output
         run: echo "Built image tag is ${{ steps.set-image-tag.outputs.image-tag }}"
 
-      - name: Debug IMAGE_TAG value
-        run: echo "IMAGE_TAG is $IMAGE_TAG"
-
   push_image:
     needs: build_and_test_container
     runs-on: ubuntu-latest
-    env: 
-        IMAGE_TAG: ${{ needs.build_and_test_container.outputs.image-tag }}
 
     steps:
       - name: Debug output from job1
         run: |
-            echo "Output image-tag: ${{ needs.build_and_test_container.outputs.image-tag }}"
-            
-      - name: Show image tag from previous job
-        run: |
-                echo "Image tag received from build job: ${{ needs.build_and_test_container.outputs.image-tag }}"
-
+          echo "Output image-tag: ${{ needs.build_and_test_container.outputs.image-tag }}"
+          
       - name: Log in to Docker Hub
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Push Docker image
-        run: docker push ${{ needs.build_and_test_container.outputs.image-tag }}
+      - name: Pull and push Docker image
+        run: |
+          IMAGE_TAG="${{ needs.build_and_test_container.outputs.image-tag }}"
+          echo "Image tag received from build job: $IMAGE_TAG"
+
+      - name: Checkout repository (needed for rebuild)
+        uses: actions/checkout@v4
+        
+      - name: Rebuild and push Docker image
+        run: |
+          IMAGE_TAG="${{ needs.build_and_test_container.outputs.image-tag }}"
+          echo "Rebuilding and pushing image: $IMAGE_TAG"
+          docker build -t "$IMAGE_TAG" .
+          docker push "$IMAGE_TAG"
