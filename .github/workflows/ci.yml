@@ -1,3 +1,80 @@
+# name: Docker CI/CD Workflow
+
+# on:
+#   push:
+#     branches:
+#       - docker_ci
+
+# jobs:
+#   build_and_test_container:
+#     runs-on: ubuntu-latest
+#     outputs:
+#       image-tag: ${{ steps.set-image-tag.outputs.image-tag }}
+
+#     steps:
+#       - name: Checkout repository
+#         uses: actions/checkout@v4
+
+#       - name: Set up Python 3.10
+#         uses: actions/setup-python@v4
+#         with:
+#           python-version: '3.10'
+
+#       - name: Install dependencies
+#         run: |
+#           python -m pip install --upgrade pip
+#           pip install scikit-learn joblib
+
+#       - name: Train model
+#         run: python scripts/train.py
+
+#       - id: set-image-tag
+#         name: Set image tag and build Docker image
+#         run: |
+#           IMAGE_TAG="${{ secrets.DOCKERHUB_USERNAME }}/mlops_assignment3:latest"
+#           echo "image-tag=$IMAGE_TAG" >> $GITHUB_OUTPUT
+#           echo "Building image with tag: $IMAGE_TAG"
+#           docker build -t "$IMAGE_TAG" .
+
+#       - name: Run Docker container and verify predictions
+#         run: |
+#           IMAGE_TAG="${{ steps.set-image-tag.outputs.image-tag }}"
+#           echo "Running container with image: $IMAGE_TAG"
+#           docker run --rm "$IMAGE_TAG" python scripts/predict.py
+
+#       - name: Show built image tag output
+#         run: echo "Built image tag is ${{ steps.set-image-tag.outputs.image-tag }}"
+
+#   push_image:
+#     needs: build_and_test_container
+#     runs-on: ubuntu-latest
+
+#     steps:
+#       - name: Debug output from job1
+#         run: |
+#           echo "Output image-tag: ${{ needs.build_and_test_container.outputs.image-tag }}"
+          
+#       - name: Log in to Docker Hub
+#         uses: docker/login-action@v3
+#         with:
+#           username: ${{ secrets.DOCKERHUB_USERNAME }}
+#           password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+#       - name: Pull and push Docker image
+#         run: |
+#           IMAGE_TAG="${{ needs.build_and_test_container.outputs.image-tag }}"
+#           echo "Image tag received from build job: $IMAGE_TAG"
+
+#       - name: Checkout repository (needed for rebuild)
+#         uses: actions/checkout@v4
+        
+#       - name: Rebuild and push Docker image
+#         run: |
+#           IMAGE_TAG="${{ needs.build_and_test_container.outputs.image-tag }}"
+#           echo "Rebuilding and pushing image: $IMAGE_TAG"
+#           docker build -t "$IMAGE_TAG" .
+#           docker push "$IMAGE_TAG"
+
 name: Docker CI/CD Workflow
 
 on:
@@ -9,12 +86,14 @@ jobs:
   build_and_test_container:
     runs-on: ubuntu-latest
     outputs:
-      image-tag: ${{ steps.set-image-tag.outputs.image-tag }}
+      image-tag: ${{ steps.build-step.outputs.image-tag }}
 
     steps:
+      # (a) Check out your repository's code
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      # (b) Set up a Python environment and install dependencies
       - name: Set up Python 3.10
         uses: actions/setup-python@v4
         with:
@@ -23,54 +102,76 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install scikit-learn joblib
+          pip install scikit-learn joblib torch
 
-      - name: Train model
-        run: python scripts/train.py
+      # (c) Run the train.py script to generate the .pth model file
+      - name: Run train.py script
+        run: |
+          python scripts/train.py
+          echo "✅ Training completed and model files generated"
 
-      - id: set-image-tag
-        name: Set image tag and build Docker image
+      # (d) Build the Docker image using the Dockerfile
+      - id: build-step
+        name: Build Docker image using Dockerfile
         run: |
           IMAGE_TAG="${{ secrets.DOCKERHUB_USERNAME }}/mlops_assignment3:latest"
-          echo "image-tag=$IMAGE_TAG" >> $GITHUB_OUTPUT
-          echo "Building image with tag: $IMAGE_TAG"
+          echo "Building Docker image: $IMAGE_TAG"
           docker build -t "$IMAGE_TAG" .
+          echo "Docker image built successfully"
+          
+          # Set output for Job 2
+          echo "image-tag=$IMAGE_TAG" >> $GITHUB_OUTPUT
 
-      - name: Run Docker container and verify predictions
+      # (e) Run the Docker container using the image just built
+      - name: Run Docker container with verification script
         run: |
-          IMAGE_TAG="${{ steps.set-image-tag.outputs.image-tag }}"
-          echo "Running container with image: $IMAGE_TAG"
+          IMAGE_TAG="${{ steps.build-step.outputs.image-tag }}"
+          echo "Running Docker container: $IMAGE_TAG"
+          echo "Executing: docker run --rm $IMAGE_TAG python scripts/predict.py"
+          
+          # This command must execute your verification script
+          # The workflow will fail if this step fails
           docker run --rm "$IMAGE_TAG" python scripts/predict.py
+          
+          echo "Container verification successful"
 
-      - name: Show built image tag output
-        run: echo "Built image tag is ${{ steps.set-image-tag.outputs.image-tag }}"
-
-  push_image:
+  # Job 2: Push the image to Docker Hub registry
+  push_to_registry:
     needs: build_and_test_container
     runs-on: ubuntu-latest
-
+    
     steps:
-      - name: Debug output from job1
+      - name: Display received image information
         run: |
-          echo "Output image-tag: ${{ needs.build_and_test_container.outputs.image-tag }}"
-          
+          echo "Received from Job 1:"
+          echo "  Image tag: ${{ needs.build_and_test_container.outputs.image-tag }}"
+
+      - name: Verify image tag is available
+        run: |
+          IMAGE_TAG="${{ needs.build_and_test_container.outputs.image-tag }}"
+          if [ -z "$IMAGE_TAG" ]; then
+            echo "ERROR: No image tag received from Job 1!"
+            exit 1
+          fi
+          echo "Image tag verified: $IMAGE_TAG"
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # (f) Push the image to Docker Hub registry
       - name: Log in to Docker Hub
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Pull and push Docker image
+      - name: Rebuild and push image to Docker Hub
         run: |
           IMAGE_TAG="${{ needs.build_and_test_container.outputs.image-tag }}"
-          echo "Image tag received from build job: $IMAGE_TAG"
-
-      - name: Checkout repository (needed for rebuild)
-        uses: actions/checkout@v4
-        
-      - name: Rebuild and push Docker image
-        run: |
-          IMAGE_TAG="${{ needs.build_and_test_container.outputs.image-tag }}"
-          echo "Rebuilding and pushing image: $IMAGE_TAG"
+          echo "Rebuilding image for push: $IMAGE_TAG"
           docker build -t "$IMAGE_TAG" .
+          
+          echo "Pushing image to Docker Hub: $IMAGE_TAG"
           docker push "$IMAGE_TAG"
+          echo "Image successfully pushed to Docker Hub"
+
