@@ -41,6 +41,9 @@ jobs:
       - name: Show built image tag output
         run: echo "Built image tag is ${{ steps.set-image-tag.outputs.image-tag }}"
 
+      - name: Debug IMAGE_TAG value
+        run: echo "IMAGE_TAG is $IMAGE_TAG"
+
   push_image:
     needs: build_and_test_container
     runs-on: ubuntu-latest
@@ -48,6 +51,10 @@ jobs:
         IMAGE_TAG: ${{ needs.build_and_test_container.outputs.image-tag }}
 
     steps:
+      - name: Debug output from job1
+        run: |
+            echo "Output image-tag: ${{ needs.build_and_test_container.outputs.image-tag }}"
+            
       - name: Show image tag from previous job
         run: |
                 echo "Image tag received from build job: ${{ needs.build_and_test_container.outputs.image-tag }}"
