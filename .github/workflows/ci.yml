@@ -37,8 +37,9 @@ jobs:
           echo "Building image with tag: $IMAGE_TAG"
           docker build -t "$IMAGE_TAG" .
 
-      - name: Debug: Step output
-        run: echo "Step output in build job: ${{ steps.set_image_tag.outputs.image_tag }}"
+      - name: Debug Step output
+        run: |
+            echo "Step output in build job: ${{ steps.set_image_tag.outputs.image_tag }}"
 
       - name: Run Docker container and verify predictions
         run: |
@@ -51,7 +52,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Debug: Output from build job
+      - name: Debug Output from build job
         run: |
           echo "Output image_tag: ${{ needs.build_and_test_container.outputs.image_tag }}"
           echo "All outputs: ${{ toJson(needs.build_and_test_container.outputs) }}"
