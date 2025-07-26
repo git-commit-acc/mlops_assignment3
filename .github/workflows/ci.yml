@@ -9,7 +9,7 @@ jobs:
   build_and_test_container:
     runs-on: ubuntu-latest
     outputs:
-      image_tag: ${{ steps.set-image-tag.outputs.image_tag }}
+      image_tag: ${{ steps.set_image_tag.outputs.image_tag }}
 
     steps:
       - name: Checkout repository
@@ -28,7 +28,7 @@ jobs:
       - name: Train model
         run: python scripts/train.py
 
-      - id: set-image-tag
+      - id: set_image_tag
         name: Set image tag and build Docker image
         run: |
           IMAGE_TAG="${{ secrets.DOCKERHUB_USERNAME }}/mlops_assignment3:latest"
@@ -38,12 +38,12 @@ jobs:
 
       - name: Run Docker container and verify predictions
         run: |
-          IMAGE_TAG="${{ steps.set-image-tag.outputs.image_tag }}"
+          IMAGE_TAG="${{ steps.set_image_tag.outputs.image_tag }}"
           echo "Running container with image: $IMAGE_TAG"
           docker run --rm "$IMAGE_TAG" python scripts/predict.py
 
       - name: Show built image tag output
-        run: echo "Built image tag is ${{ steps.set-image-tag.outputs.image_tag }}"
+        run: echo "Built image tag is ${{ steps.set_image_tag.outputs.image_tag }}"
 
   push_image:
     needs: build_and_test_container
